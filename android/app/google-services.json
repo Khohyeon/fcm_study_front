@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "453283270931",
+
+    "project_id": "fcmgood-41ac1",
+    "storage_bucket": "fcmgood-41ac1.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:453283270931:android:9cd0ed8fdc9e06cea3cae6",
+        "android_client_info": {
+          "package_name": "shop.mtcoding.fcm_study"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "453283270931-4b5tin065h42ahb50fbn6ts85n6h8bts.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAzj8yK_815XbGFTaXa43tYH9sVnUSihb8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "453283270931-4b5tin065h42ahb50fbn6ts85n6h8bts.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
