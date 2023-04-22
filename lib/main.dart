@@ -1,78 +1,205 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:http/http.dart' as http;
+// Copyright 2022 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+
+// Background message handler :
+// https://firebase.google.com/docs/cloud-messaging/flutter/receive#background_messages
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // If you're going to use other Firebase services in the background, such as Firestore,
+  // make sure you call `initializeApp` before using other Firebase services.
   await Firebase.initializeApp();
-  runApp(const MyApp());
+
+  print("Handling a background message: ${message.messageId}");
+}
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  runApp(ChangeNotifierProvider(
+    create: (context) => ApplicationState(),
+    builder: (context, child) => const MyApp(),
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
+  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: HomePage(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const MyHomePage(title: 'Firebase Cloud Messaging'),
     );
   }
 }
 
-class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key, required this.title});
 
-  @override
-  _HomePageState createState() => _HomePageState();
-}
-
-// 안드로이드 에뮬레이터(가상 디바이스)에서는 localhost(127.0.0.1)을 사용할 수 없음
-// 10.0.2.2는 안드로이드 에뮬레이터에서 호스트 컴퓨터를 가리키는 가상 IP 주소임
-String serverUrl = "http://10.0.2.2:8080/fcm/token"; // 서버 주소
-
-class _HomePageState extends State<HomePage> {
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // FCM 토큰 가져오기
-    _firebaseMessaging.getToken().then((token) {
-      print('FCM Token: $token');
-
-      sendTokenToServer(token!);
-    });
-
-    // FCM 메시지 수신 이벤트 등록
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print(message);
-      print("FCM Message Received: ${message.notification?.body}");
-    });
-  }
-
-  // APP을 실행하였을 때 FCM 토큰을 Server로 보내기 위한 메서드
-  void sendTokenToServer(String token) async {
-    try {
-      final response = await http.post(
-        Uri.parse(serverUrl),
-        body: {
-          "token": token,
-        },
-      );
-      if (response.statusCode == 200) {
-        print("Token sent successfully");
-      } else {
-        print("Failed to send token");
-      }
-    } catch (e) {
-      print("Error sending token: $e");
-    }
-  }
+  final String title;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: Center(
+        child: Consumer<ApplicationState>(
+          builder: (context, appState, _) => Column(
+            children: <Widget>[
+              const Image(
+                  image: AssetImage('assets/fcm_horizontal_lockup_light.png')),
+              Visibility(
+                visible: appState.messagingAllowed,
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Click the "Subscribe To Weather" button below to subscribe to the'
+                            ' "weather" topic. Messages sent to the weather topic will be'
+                            ' received.',
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text('FCM Token: ${appState.fcmToken}'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => appState.subscribeToTopic('weather'),
+                      child: const Text('Subscribe To Weather'),
+                    ),
+                  ],
+                ),
+              ),
+              Visibility(
+                visible: !appState.messagingAllowed,
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Thi quickstart requires notification permissions to be'
+                            ' activated.',
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => appState.requestMessagingPermission(),
+                      child: const Text('Request Notification Permission'),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ApplicationState extends ChangeNotifier {
+  ApplicationState() {
+    init();
+  }
+
+  late FirebaseMessaging firebaseMessaging;
+
+  String _fcmToken = '';
+  String get fcmToken => _fcmToken;
+
+  bool _messagingAllowed = false;
+  bool get messagingAllowed => _messagingAllowed;
+
+  Future<void> init() async {
+    await Firebase.initializeApp(
+      // options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    firebaseMessaging = FirebaseMessaging.instance;
+
+    firebaseMessaging.onTokenRefresh.listen((token) {
+      _fcmToken = token;
+      debugPrint(token);
+      notifyListeners();
+      // If necessary send token to application server.
+
+      // Note: This callback is fired at each app startup and whenever a new
+      // token is generated.
+    });
+
+    // Replace this with your key for web apps.
+    const vapidKey = '';
+    firebaseMessaging.getToken(vapidKey: vapidKey).then((token) {
+      print(token);
+      if (token != null) {
+        _fcmToken = token;
+        debugPrint(token);
+        notifyListeners();
+      }
+    });
+
+    firebaseMessaging.getNotificationSettings().then((settings) {
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        _messagingAllowed = true;
+        notifyListeners();
+      }
+    });
+
+    FirebaseMessaging.onMessage.listen((remoteMessage) {
+      debugPrint('Got a message in the foreground');
+      debugPrint('message data: ${remoteMessage.data}');
+
+      if (remoteMessage.notification != null) {
+        debugPrint('message is a notification');
+        // On Android, foreground notifications are not shown, only when the app
+        // is backgrounded.
+      }
+    });
+  }
+
+  Future<void> requestMessagingPermission() async {
+    NotificationSettings settings = await firebaseMessaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      _messagingAllowed = true;
+      notifyListeners();
+    }
+
+    debugPrint('Users permission status: ${settings.authorizationStatus}');
+  }
+
+  Future<void> subscribeToTopic(String topic) async {
+    await firebaseMessaging.subscribeToTopic(topic);
   }
 }
