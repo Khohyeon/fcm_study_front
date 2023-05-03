@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 
 // Background message handler :
 // https://firebase.google.com/docs/cloud-messaging/flutter/receive#background_messages
@@ -154,6 +155,10 @@ class ApplicationState extends ChangeNotifier {
     const vapidKey = '';
     firebaseMessaging.getToken(vapidKey: vapidKey).then((token) {
       print(token);
+      print('FCM Token: $token');
+
+      sendTokenToServer(token!);
+
       if (token != null) {
         _fcmToken = token;
         debugPrint(token);
@@ -179,7 +184,6 @@ class ApplicationState extends ChangeNotifier {
       }
     });
   }
-
   Future<void> requestMessagingPermission() async {
     NotificationSettings settings = await firebaseMessaging.requestPermission(
       alert: true,
@@ -197,6 +201,29 @@ class ApplicationState extends ChangeNotifier {
     }
 
     debugPrint('Users permission status: ${settings.authorizationStatus}');
+  }
+
+  // 안드로이드 에뮬레이터(가상 디바이스)에서는 localhost(127.0.0.1)을 사용할 수 없음
+// 10.0.2.2는 안드로이드 에뮬레이터에서 호스트 컴퓨터를 가리키는 가상 IP 주소임
+  String serverUrl = "http://10.0.2.2:8081/fcm/token"; // 서버 주소
+
+
+  void sendTokenToServer(String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse(serverUrl),
+        body: {
+          "token": token,
+        },
+      );
+      if (response.statusCode == 200) {
+        print("Token sent successfully");
+      } else {
+        print("Failed to send token");
+      }
+    } catch (e) {
+      print("Error sending token: $e");
+    }
   }
 
   Future<void> subscribeToTopic(String topic) async {
